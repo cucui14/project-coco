@@ -156,6 +156,12 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
             playersRef.current[player.playerId] = player;
             if (onPlayersUpdate) onPlayersUpdate({ ...playersRef.current });
         });
+        socket.on('playerUpdated', (player) => {
+            if (playersRef.current[player.playerId]) {
+                Object.assign(playersRef.current[player.playerId], player);
+                if (onPlayersUpdate) onPlayersUpdate({ ...playersRef.current });
+            }
+        });
         socket.on('playerDisconnected', (id) => delete playersRef.current[id]);
         socket.on('playerMoved', (player) => {
             if (playersRef.current[player.playerId]) {
@@ -496,9 +502,9 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
 
                 // Emote
                 if (p.activeEmote && (!p.emoteEndTime || p.emoteEndTime > Date.now())) {
-                    ctx.font = '20px serif';
+                    ctx.font = '24px serif';
                     ctx.textAlign = 'center';
-                    ctx.fillText(p.activeEmote === 'heart' ? '❤️' : p.activeEmote === 'laugh' ? '😂' : '👋', p.x + 16, p.y - 10);
+                    ctx.fillText(p.activeEmote, p.x + 16, p.y - 40);
                 }
 
                 // Name

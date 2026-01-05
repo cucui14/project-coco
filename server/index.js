@@ -80,24 +80,16 @@ io.on('connection', (socket) => {
     if (players[socket.id]) {
         const p = players[socket.id];
         
-        // Validation: Collision Detection
-        // Calculate grid position
+        // Collision Detection - check center tile
         const gridX = Math.floor(movementData.x / TILE_SIZE);
         const gridY = Math.floor(movementData.y / TILE_SIZE);
-
-        // Check if playable area (0)
-        // Simple check: if center is in wall, deny? 
-        // Better: Check 4 corners or just center for now.
-        
-        // Better: Check 4 corners or just center for now.
         
         let validMove = true;
         // Check bounds
         if (gridY >= 0 && gridY < gameMap.length && gridX >= 0 && gridX < gameMap[0].length) {
             const tile = gameMap[gridY][gridX];
-            // Walkable tiles: 0 (grass), 3 (path), 4 (flowers), 5 (bush)
-            // Solid tiles: 1 (water), 2 (tree), 6 (rock)
-            const walkableTiles = [0, 3, 4, 5];
+            // Walkable tiles: 0 (grass), 3 (path), 4 (flowers), 5 (bush), 9 (floor), 11 (bonfire)
+            const walkableTiles = [0, 3, 4, 5, 9, 11];
             if (!walkableTiles.includes(tile)) {
                 validMove = false;
             }
@@ -122,23 +114,14 @@ io.on('connection', (socket) => {
 
   socket.on('chatMessage', (msg) => {
       if (players[socket.id]) {
-          const sender = players[socket.id];
           const messageData = {
               id: Date.now().toString(),
               playerId: socket.id,
               text: msg.text,
               timestamp: Date.now()
           };
-
-          // Proximity Check
-          // Simple: Iterating all players and sending if close?
-          // Or just broadcast to all with position data, let client filter?
-          // Server-side filtering is better for bandwidth but for < 100 players broadcast is fine.
-          // Let's Broadcast to all but include sender info so clients can check distance.
-          // Actually, standard is to send 'chatMessage' event.
-          
-          socket.broadcast.emit('chatMessage', messageData);
-          socket.emit('chatMessage', messageData); // Echo back to sender
+          // Broadcast to all including sender
+          io.emit('chatMessage', messageData);
       }
   });
 
