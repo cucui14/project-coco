@@ -249,21 +249,26 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
                 if (closest) {
                     socket.emit('mineResource', closest.id);
                 } else {
-                    // Try to mine the tile in front of the player based on direction
+                    // Try to mine the tile immediately in front of the player
                     const dir = me.direction || 0;
-                    let dx = 0, dy = 0;
+                    // Use a small offset (half tile) to find the tile in front
+                    let offsetX = 0, offsetY = 0;
+                    const offset = TILE_SIZE * 0.6; // Slightly more than half tile
                     // Direction mapping: 0=down, 1=down-right, 2=right, 3=up-right, 4=up, 5=up-left, 6=left, 7=down-left
-                    if (dir === 0) { dy = 1; }
-                    else if (dir === 1) { dx = 1; dy = 1; }
-                    else if (dir === 2) { dx = 1; }
-                    else if (dir === 3) { dx = 1; dy = -1; }
-                    else if (dir === 4) { dy = -1; }
-                    else if (dir === 5) { dx = -1; dy = -1; }
-                    else if (dir === 6) { dx = -1; }
-                    else if (dir === 7) { dx = -1; dy = 1; }
+                    if (dir === 0) { offsetY = offset; }
+                    else if (dir === 1) { offsetX = offset; offsetY = offset; }
+                    else if (dir === 2) { offsetX = offset; }
+                    else if (dir === 3) { offsetX = offset; offsetY = -offset; }
+                    else if (dir === 4) { offsetY = -offset; }
+                    else if (dir === 5) { offsetX = -offset; offsetY = -offset; }
+                    else if (dir === 6) { offsetX = -offset; }
+                    else if (dir === 7) { offsetX = -offset; offsetY = offset; }
 
-                    const tileX = Math.floor(me.x / TILE_SIZE) + dx;
-                    const tileY = Math.floor(me.y / TILE_SIZE) + dy;
+                    // Calculate target tile based on player center + offset
+                    const targetX = me.x + 16 + offsetX; // +16 to get player center
+                    const targetY = me.y + offsetY;
+                    const tileX = Math.floor(targetX / TILE_SIZE);
+                    const tileY = Math.floor(targetY / TILE_SIZE);
 
                     // Check if tile is mineable (not dirt=3 or water=1)
                     if (mapRef.current[tileY] && mapRef.current[tileY][tileX] !== undefined) {
@@ -271,7 +276,6 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
                         if (tile !== 3 && tile !== 1) {
                             socket.emit('mineTile', { x: tileX, y: tileY });
                         } else {
-                            // Try NPC/sign interaction as fallback
                             socket.emit('playerInteract');
                         }
                     } else {

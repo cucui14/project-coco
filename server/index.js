@@ -275,11 +275,11 @@ io.on('connection', (socket) => {
           return;
       }
       
-      // Check distance (must be within 2 tiles)
+      // Check distance (must be adjacent - within 1.2 tiles)
       const tileCenterX = x * TILE_SIZE + TILE_SIZE / 2;
       const tileCenterY = y * TILE_SIZE + TILE_SIZE / 2;
       const dist = Math.sqrt(Math.pow(player.x - tileCenterX, 2) + Math.pow(player.y - tileCenterY, 2));
-      if (dist > TILE_SIZE * 2.5) {
+      if (dist > TILE_SIZE * 1.5) {
           socket.emit('miningResult', { success: false, message: 'Too far away!' });
           return;
       }
@@ -297,14 +297,16 @@ io.on('connection', (socket) => {
       let yieldAmount = 1;
       switch (tile) {
           case 0: // Grass
-              yieldItem = null; // No drop from grass
+              yieldItem = 'grass';
+              yieldAmount = 1;
               break;
           case 2: // Tree
               yieldItem = 'wood';
               yieldAmount = 3;
               break;
           case 4: // Flowers
-              yieldItem = null;
+              yieldItem = 'flower';
+              yieldAmount = 1;
               break;
           case 5: // Bush
               yieldItem = 'wood';
