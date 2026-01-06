@@ -88,8 +88,8 @@ io.on('connection', (socket) => {
         // Check bounds
         if (gridY >= 0 && gridY < gameMap.length && gridX >= 0 && gridX < gameMap[0].length) {
             const tile = gameMap[gridY][gridX];
-            // Walkable tiles: 0 (grass), 3 (path), 4 (flowers), 5 (bush), 9 (floor), 11 (bonfire)
-            const walkableTiles = [0, 3, 4, 5, 9, 11];
+            // Walkable tiles: 0 (grass), 3 (dirt/path) - everything else blocks movement
+            const walkableTiles = [0, 3];
             if (!walkableTiles.includes(tile)) {
                 validMove = false;
             }
@@ -261,6 +261,107 @@ io.on('connection', (socket) => {
           });
           io.emit('resourceHit', { id: node.id, health: node.health });
       }
+  });
+
+  // Handle tile mining (Minecraft-style - mine any tile except dirt/water)
+  socket.on('mineTile', (data) => {
+      if (!players[socket.id]) return;
+      const player = players[socket.id];
+      const { x, y } = data;
+      
+      // Check bounds
+      if (y < 0 || y >= gameMap.length || x < 0 || x >= gameMap[0].length) {
+          socket.emit('miningResult', { success: false, message: 'Out of bounds!' });
+          return;
+      }
+      
+      // Check distance (must be within 2 tiles)
+      const tileCenterX = x * TILE_SIZE + TILE_SIZE / 2;
+      const tileCenterY = y * TILE_SIZE + TILE_SIZE / 2;
+      const dist = Math.sqrt(Math.pow(player.x - tileCenterX, 2) + Math.pow(player.y - tileCenterY, 2));
+      if (dist > TILE_SIZE * 2.5) {
+          socket.emit('miningResult', { success: false, message: 'Too far away!' });
+          return;
+      }
+      
+      const tile = gameMap[y][x];
+      
+      // Cannot mine dirt (3) or water (1) - these are base/unmovable
+      if (tile === 3 || tile === 1) {
+          socket.emit('miningResult', { success: false, message: 'Cannot mine this!' });
+          return;
+      }
+      
+      // Determine what resource to give based on tile type
+      let yieldItem = null;
+      let yieldAmount = 1;
+      switch (tile) {
+          case 0: // Grass
+              yieldItem = null; // No drop from grass
+              break;
+          case 2: // Tree
+              yieldItem = 'wood';
+              yieldAmount = 3;
+              break;
+          case 4: // Flowers
+              yieldItem = null;
+              break;
+          case 5: // Bush
+              yieldItem = 'wood';
+              yieldAmount = 1;
+              break;
+          case 6: // Rock
+              yieldItem = 'stone';
+              yieldAmount = 3;
+              break;
+          case 7: // Stone Wall
+              yieldItem = 'stone';
+              yieldAmount = 3;
+              break;
+          case 8: // Fence
+              yieldItem = 'wood';
+              yieldAmount = 2;
+              break;
+          case 9: // Wood Floor
+              yieldItem = 'wood';
+              yieldAmount = 1;
+              break;
+          case 10: // House Wall
+              yieldItem = 'stone';
+              yieldAmount = 2;
+              break;
+          case 11: // Bonfire
+              yieldItem = 'wood';
+              yieldAmount = 2;
+              break;
+          default:
+              yieldItem = null;
+      }
+      
+      // Give resources if any
+      if (yieldItem) {
+          const existingItem = player.inventory.find(i => i.item === yieldItem);
+          if (existingItem) {
+              existingItem.amount += yieldAmount;
+          } else {
+              player.inventory.push({ item: yieldItem, amount: yieldAmount });
+          }
+      }
+      
+      // Change tile to dirt
+      gameMap[y][x] = 3;
+      
+      // Notify player
+      socket.emit('miningResult', {
+          success: true,
+          depleted: true,
+          item: yieldItem,
+          amount: yieldAmount,
+          inventory: player.inventory
+      });
+      
+      // Broadcast tile change to all players
+      io.emit('tileChanged', { x, y, tileType: 3 });
   });
 
   // Handle block placement

@@ -180,7 +180,11 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
             if (result.success) {
                 // Trigger mining animation for 800ms
                 miningEndTimeRef.current = Date.now() + 800;
-                setInteractionText(result.depleted ? `+${result.amount} ${result.item}!` : `Mining... ${result.healthRemaining}`);
+                if (result.depleted) {
+                    setInteractionText(result.item ? `+${result.amount} ${result.item}!` : 'Cleared!');
+                } else {
+                    setInteractionText(`Mining... ${result.healthRemaining}`);
+                }
                 if (result.inventory) setInventory(result.inventory);
                 setTimeout(() => setInteractionText(null), 1500);
             }
@@ -198,6 +202,9 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
             if (node) node.health = data.health;
         });
         socket.on('blockPlaced', (data) => {
+            if (mapRef.current[data.y]) mapRef.current[data.y][data.x] = data.tileType;
+        });
+        socket.on('tileChanged', (data) => {
             if (mapRef.current[data.y]) mapRef.current[data.y][data.x] = data.tileType;
         });
         socket.on('blockPlaceResult', (result) => {
@@ -225,14 +232,14 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
             if (e.key === '-' || e.key === '_') setZoomLevel(z => Math.max(z - 0.2, 1.0));
             if (e.key === '=' || e.key === '+') setZoomLevel(z => Math.min(z + 0.2, 4.0));
 
-            // Interaction 'E'
+            // Interaction 'E' - Mine resources, tiles, or interact with NPCs
             if (e.key === 'e' || e.key === 'E') {
                 if (!myIdRef.current) return;
                 const me = playersRef.current[myIdRef.current];
                 if (!me) return;
 
-                // Prioritize resources
-                let closest = null, minDist = 50; // Close range mining
+                // Prioritize resource nodes first
+                let closest = null, minDist = 50;
                 resourceNodesRef.current.forEach(node => {
                     if (node.health <= 0) return;
                     const d = Math.hypot(node.x - me.x, node.y - me.y);
@@ -242,7 +249,34 @@ const GameCanvas = ({ onSocketConnected, onPlayersUpdate, onMyIdSet, isMobile = 
                 if (closest) {
                     socket.emit('mineResource', closest.id);
                 } else {
-                    socket.emit('playerInteract');
+                    // Try to mine the tile in front of the player based on direction
+                    const dir = me.direction || 0;
+                    let dx = 0, dy = 0;
+                    // Direction mapping: 0=down, 1=down-right, 2=right, 3=up-right, 4=up, 5=up-left, 6=left, 7=down-left
+                    if (dir === 0) { dy = 1; }
+                    else if (dir === 1) { dx = 1; dy = 1; }
+                    else if (dir === 2) { dx = 1; }
+                    else if (dir === 3) { dx = 1; dy = -1; }
+                    else if (dir === 4) { dy = -1; }
+                    else if (dir === 5) { dx = -1; dy = -1; }
+                    else if (dir === 6) { dx = -1; }
+                    else if (dir === 7) { dx = -1; dy = 1; }
+
+                    const tileX = Math.floor(me.x / TILE_SIZE) + dx;
+                    const tileY = Math.floor(me.y / TILE_SIZE) + dy;
+
+                    // Check if tile is mineable (not dirt=3 or water=1)
+                    if (mapRef.current[tileY] && mapRef.current[tileY][tileX] !== undefined) {
+                        const tile = mapRef.current[tileY][tileX];
+                        if (tile !== 3 && tile !== 1) {
+                            socket.emit('mineTile', { x: tileX, y: tileY });
+                        } else {
+                            // Try NPC/sign interaction as fallback
+                            socket.emit('playerInteract');
+                        }
+                    } else {
+                        socket.emit('playerInteract');
+                    }
                 }
             }
         };
